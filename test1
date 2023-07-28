@@ -1,0 +1,31 @@
+public void removeAuditByRunId(Set<String> runIds) throws SQLException {
+		int nb = 0;
+		// clean Storage
+		try (Connection conn = _dbModel.getDB().getConnection();
+			 PreparedStatement stmt = conn.prepareStatement("DELETE FROM " + DbAudit.GetTableName()
+					 + " WHERE " + DbRowAudit.Field.instanceId + "=? AND "
+					 + DbRowAudit.Field.runId + "=?");
+		) {
+			stmt.setString(1, _instanceId);
+			for (String runId : runIds) {
+				stmt.setString(2, runId);
+				stmt.addBatch();
+				nb++;
+				if (nb % 100 == 0) {
+					stmt.executeBatch();
+				}
+			}
+			stmt.executeBatch();
+			conn.commit();
+		}
+
+		// clean memory
+		StringJoiner sj = new StringJoiner("','", "['", "'] contains runId");
+		runIds.forEach(sj::add);
+		CompiledExpression expression = new ExpressionCompiler(sj.toString()).compile();
+		for (AuditEntity audit : getCache().keySet()) {
+			if ((Boolean)MVEL.executeExpression(expression, audit)) {
+				remove(audit);
+			}
+		}
+	}
